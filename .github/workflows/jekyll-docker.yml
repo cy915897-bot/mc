@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aa1228no1 ∞ Minecraft 1.12.2 WASM</title>
+    <style>
+        /* 重置所有邊界，確保 100% 全螢幕無死角 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* iframe 樣式，去除邊框並填滿畫面 */
+        #mc-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        #loading-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            font-size: 1.5rem;
+            text-align: center;
+            z-index: -1;
+            text-shadow: 0 0 10px rgba(0,255,0,0.8);
+        }
+
+        /* --- ⚡ 左上角：迷你開關按鈕 --- */
+        #armory-toggle {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 51;
+            background: rgba(0, 20, 0, 0.6);
+            color: #00FF00;
+            border: 1px solid #00FF00;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            backdrop-filter: blur(2px);
+            transition: all 0.2s;
+        }
+        #armory-toggle:hover {
+            background: rgba(0, 255, 0, 0.3);
+        }
+
+        /* --- ⚡ 左上角：隱藏式小面板 --- */
+        #quick-armory {
+            display: none; /* 預設隱藏 */
+            position: absolute;
+            top: 45px;
+            left: 10px;
+            z-index: 50;
+            background: rgba(10, 20, 10, 0.85);
+            border: 1px solid #00FF00;
+            padding: 10px;
+            border-radius: 6px;
+            flex-direction: column;
+            gap: 6px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+            width: 220px; /* 寬度大幅縮小 */
+        }
+
+        .copy-btn {
+            background: rgba(0, 255, 0, 0.15);
+            color: #fff;
+            border: 1px solid #00FF00;
+            padding: 5px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.75rem; /* 字體縮小 */
+            text-align: left;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover { background: rgba(0, 255, 0, 0.5); }
+
+        .plan-b-note {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px dashed #FF5555;
+            color: #FFaaaa;
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            line-height: 1.3;
+        }
+
+        /* --- 系統提示 Toast --- */
+        #toast {
+            visibility: hidden;
+            min-width: 200px;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #00FF00;
+            text-align: center;
+            border-radius: 5px;
+            padding: 10px;
+            position: absolute;
+            z-index: 100;
+            left: 50%;
+            top: 20px;
+            transform: translateX(-50%);
+            font-size: 0.9rem;
+            border: 1px solid #00FF00;
+        }
+        #toast.show { visibility: visible; animation: fadein 0.3s, fadeout 0.5s 2s; }
+        @keyframes fadein { from {top: 0; opacity: 0;} to {top: 20px; opacity: 1;} }
+        @keyframes fadeout { from {top: 20px; opacity: 1;} to {top: 0; opacity: 0;} }
+
+        /* --- 📜 右下角：懸浮指令速查按鈕 (也縮小) --- */
+        #btn-cheatsheet {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 50;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00FF00;
+            border: 1px solid #00FF00;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        /* --- 🌌 全息指令面板 --- */
+        #cheatsheet-modal {
+            display: none; position: absolute; top: 5%; left: 10%; width: 80%; height: 90%; z-index: 100;
+            background: rgba(10, 15, 10, 0.95); border: 2px solid #00FF00; border-radius: 10px; color: #e0e0e0;
+            overflow-y: auto; padding: 20px; box-sizing: border-box;
+        }
+        #cheatsheet-modal h1 { color: #00FF00; border-bottom: 1px solid #00FF00; font-size: 1.5rem;}
+        #cheatsheet-modal h2 { color: #FFD700; margin-top: 20px; font-size: 1.2rem;}
+        #cheatsheet-modal code { background: rgba(0, 255, 0, 0.15); color: #00FF00; padding: 2px 4px; user-select: all;}
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.85rem;}
+        th, td { border: 1px solid #333; padding: 6px; }
+        th { background: #112211; color: #00FF00; }
+        #btn-close { position: sticky; top: 0; float: right; background: #FF0000; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="loading-text">連線中...</div>
+    
+    <iframe id="mc-iframe" src="https://play.mcjs.cc/1.12.2wasm/" allowfullscreen="true" allow="clipboard-read; clipboard-write; cross-origin-isolated"></iframe>
+
+
+
+    <script>
+        const iframe = document.getElementById('mc-iframe');
+        const toast = document.getElementById('toast');
+        const copyBtns = document.querySelectorAll('.copy-btn');
+        const armoryToggle = document.getElementById('armory-toggle');
+        const quickArmory = document.getElementById('quick-armory');
+        const btnCheatsheet = document.getElementById('btn-cheatsheet');
+        const modal = document.getElementById('cheatsheet-modal');
+        const btnClose = document.getElementById('btn-close');
+
+        // 面板展開/收起邏輯
+        armoryToggle.addEventListener('click', () => {
+            if (quickArmory.style.display === 'flex') {
+                quickArmory.style.display = 'none';
+                armoryToggle.innerText = '⚡ 展開武裝';
+                iframe.focus(); // 把焦點還給遊戲
+            } else {
+                quickArmory.style.display = 'flex';
+                armoryToggle.innerText = '⚡ 收起面板';
+            }
+        });
+
+        // 複製邏輯
+        copyBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const cmd = btn.getAttribute('data-cmd');
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(cmd);
+                    } else { throw new Error('Fallback'); }
+                } catch (err) {
+                    const el = document.createElement('textarea');
+                    el.value = cmd; el.style.position = 'fixed'; el.style.left = '-9999px';
+                    document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                }
+                toast.className = "show";
+                setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500);
+                
+                // 點擊複製後，自動收起面板並返回遊戲
+                quickArmory.style.display = 'none';
+                armoryToggle.innerText = '⚡ 展開武裝';
+                setTimeout(() => { iframe.focus(); }, 100);
+            });
+        });
+
+        btnCheatsheet.addEventListener('click', () => { modal.style.display = 'block'; });
+        btnClose.addEventListener('click', () => { modal.style.display = 'none'; iframe.focus(); });
+        window.onload = () => iframe.focus();
+    </script>
+</body>
+</html>
