@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aa1228no1 ∞ Minecraft 1.12.2 WASM (Techguns)</title>
+    <style>
+        /* --- 基礎重置與佈局 --- */
+        :root {
+            --neon-green: #00FF00;
+            --tech-blue: #00e5ff;
+            --dark-bg: rgba(5, 15, 5, 0.85);
+            --glass-border: rgba(0, 255, 0, 0.4);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            color: #e0e0e0;
+        }
+
+        * { box-sizing: border-box; }
+
+        /* --- 遊戲主體 iframe --- */
+        #mc-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- 載入畫面 --- */
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 5; 
+            transition: opacity 0.5s ease;
+        }
+
+        #loading-text {
+            color: var(--neon-green);
+            font-size: 1.5rem; text-align: center;
+            text-shadow: 0 0 15px rgba(0,255,0,0.8);
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.6; text-shadow: 0 0 5px rgba(0,255,0,0.5); }
+            to { opacity: 1; text-shadow: 0 0 20px rgba(0,255,0,1); }
+        }
+
+        /* --- UI 共用樣式 (玻璃擬態) --- */
+        .glass-panel {
+            background: var(--dark-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.15);
+        }
+
+        .neon-btn {
+            background: rgba(0, 20, 0, 0.6);
+            color: var(--neon-green);
+            border: 1px solid var(--glass-border);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .neon-btn:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+            transform: translateY(-1px);
+        }
+        .neon-btn:active { transform: translateY(1px); }
+
+        /* --- 左上角：武裝控制面板 --- */
+        #ui-top-left {
+            position: absolute;
+            top: 15px; left: 15px;
+            z-index: 50;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        #quick-armory {
+            display: none; 
+            flex-direction: column; gap: 8px;
+            padding: 12px; width: 260px; 
+            animation: slideDown 0.3s ease forwards;
+            transform-origin: top center;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: scaleY(0.9); }
+            to { opacity: 1; transform: scaleY(1); }
+        }
+
+        .cmd-btn {
+            background: rgba(0, 255, 0, 0.1); color: #fff;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            padding: 8px 10px; border-radius: 4px;
+            cursor: pointer; font-family: inherit; font-size: 0.8rem; 
+            text-align: left; transition: all 0.2s;
+        }
+        .cmd-btn:hover { background: rgba(0, 255, 0, 0.3); border-color: var(--neon-green); }
+        .cmd-btn.tech { border-color: rgba(0, 229, 255, 0.4); color: var(--tech-blue); }
+        .cmd-btn.tech:hover { background: rgba(0, 229, 255, 0.2); border-color: var(--tech-blue); }
+
+        .plan-b-note {
+            background: rgba(255, 85, 85, 0.15); border: 1px dashed #FF5555;
+            color: #FFaaaa; padding: 8px; border-radius: 4px;
+            font-size: 0.75rem; line-height: 1.4; margin-top: 5px;
+        }
+
+        /* --- 右下角：指令速查 --- */
+        #btn-cheatsheet {
+            position: absolute; bottom: 15px; right: 15px; z-index: 50;
+        }
+
+        /* --- 全息指令面板 (Modal) --- */
+        #modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; 
+            width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); 
+            z-index: 99; backdrop-filter: blur(3px);
+            align-items: center; justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        #cheatsheet-modal {
+            width: 90%; max-width: 650px; max-height: 85vh; 
+            padding: 25px; overflow-y: auto; position: relative;
+        }
+
+        #cheatsheet-modal h1 { 
+            color: var(--neon-green); border-bottom: 2px solid var(--neon-green); 
+            font-size: 1.5rem; margin-top: 0; padding-bottom: 10px;
+        }
+        #cheatsheet-modal h2 { 
+            color: #FFD700; font-size: 1.1rem; margin: 20px 0 10px 0;
+        }
+        #cheatsheet-modal h2.tech { color: var(--tech-blue); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: rgba(0,0,0,0.5); }
+        th, td { border: 1px solid #333; padding: 10px; }
+        th { background: rgba(0, 50, 0, 0.8); color: var(--neon-green); text-align: left;}
+        th.tech { background: rgba(0, 40, 60, 0.8); color: var(--tech-blue); }
+        td:first-child { color: #aaa; width: 40%; }
+        
+        code.copy-target { 
+            background: rgba(0, 255, 0, 0.15); color: var(--neon-green); 
+            padding: 4px 8px; border-radius: 3px; cursor: pointer; display: inline-block; transition: background 0.2s;
+        }
+        code.copy-target:hover { background: rgba(0, 255, 0, 0.4); }
+        code.copy-target.tech { background: rgba(0, 229, 255, 0.15); color: var(--tech-blue); }
+        code.copy-target.tech:hover { background: rgba(0, 229, 255, 0.4); }
+
+        #btn-close { 
+            position: absolute; top: 15px; right: 15px; 
+            background: rgba(255, 0, 0, 0.2); color: #FF5555; 
+            border: 1px solid #FF5555; padding: 5px 10px; border-radius: 4px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        #btn-close:hover { background: #FF5555; color: white; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* --- 系統提示 Toast --- */
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: var(--dark-bg);
+            color: var(--neon-green); text-align: center; border-radius: 30px;
+            padding: 12px 20px; position: fixed; z-index: 100;
+            left: 50%; top: 20px; transform: translateX(-50%) translateY(-20px);
+            font-size: 0.95rem; border: 1px solid var(--neon-green);
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3); opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--tech-blue); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00b3cc; }
+    </style>
+</head>
+<body>
+    
+    <div id="loading-overlay">
+        <div id="loading-text">連線至伺服器中...<br><span style="font-size: 0.8rem; opacity: 0.7;">Initialzing WASM Engine</span></div>
+    </div>
+    
+    <iframe id="mc-iframe" src="https://play.mcjs.cc/1.12.2wasm/" allowfullscreen allow="clipboard-read; clipboard-write; cross-origin-isolated"></iframe>
+
+    <!-- 左上角：快速武裝 -->
+    <div id="ui-top-left">
+        <button id="armory-toggle" class="neon-btn">⚡ 展開武裝 / Techguns</button>
+        <div id="quick-armory" class="glass-panel">
+            <button class="cmd-btn tech" data-cmd="/give @p techguns:ak47 1">🔫 獲取 AK-47 突擊步槍</button>
+            <button class="cmd-btn tech" data-cmd="/give @p techguns:thompson 1">🔫 獲取 湯普森衝鋒槍</button>
+            <button class="cmd-btn tech" data-cmd="/give @p techguns:itemshared 64 33">📦 獲取 突擊步槍彈匣x64</button>
+            <hr style="border-color: rgba(255,255,255,0.1); margin: 2px 0;">
+            <button class="cmd-btn" data-cmd="/gamemode 1">✨ 切換創造模式</button>
+            <button class="cmd-btn" data-cmd="/time set day">☀️ 設定為白天</button>
+            <div class="plan-b-note">💡 點擊上方按鈕複製指令後，回到遊戲按「T」鍵貼上即可執行！</div>
+        </div>
+    </div>
+
+    <div id="toast">✅ 指令已複製！</div>
+
+    <!-- 右下角：指令速查 -->
+    <button id="btn-cheatsheet" class="neon-btn">📜 科技槍 / 指令速查</button>
+
+    <!-- 指令速查 Modal -->
+    <div id="modal-overlay">
+        <div id="cheatsheet-modal" class="glass-panel">
+            <button id="btn-close">關閉 ✕</button>
+            <h1>Minecraft 實用指令表</h1>
+            <p style="color: #aaa; font-size: 0.85rem; margin-top: -10px;">點擊右側代碼區塊即可快速複製。</p>
+            
+            <h2 class="tech">⚙️ Techguns 科技槍械模組</h2>
+            <table>
+                <tr><th class="tech">功能 / 物品</th><th class="tech">指令 (點擊複製)</th></tr>
+                <tr><td>獲取 彈藥製造機 (Ammo Press)</td><td><code class="copy-target tech" data-cmd="/give @p techguns:basicmachine 1 1">/give @p techguns:basicmachine 1 1</code></td></tr>
+                <tr><td>獲取 金屬滾壓機 (Metal Press)</td><td><code class="copy-target tech" data-cmd="/give @p techguns:basicmachine 1 0">/give @p techguns:basicmachine 1 0</code></td></tr>
+                <tr><td>獲取 化學合成裝置</td><td><code class="copy-target tech" data-cmd="/give @p techguns:basicmachine 1 2">/give @p techguns:basicmachine 1 2</code></td></tr>
+                <tr><td>獲取 反應爐 (Reactor)</td><td><code class="copy-target tech" data-cmd="/give @p techguns:multiblockmachine 1 2">/give @p techguns:multiblockmachine 1 2</code></td></tr>
+                <tr><td>獲取 販賣機 (Vending Machine)</td><td><code class="copy-target tech" data-cmd="/give @p techguns:itemshared 1 89">/give @p techguns:itemshared 1 89</code></td></tr>
+                <tr><td>獲取 AK-47</td><td><code class="copy-target tech" data-cmd="/give @p techguns:ak47">/give @p techguns:ak47</code></td></tr>
+                <tr><td>獲取 左輪手槍</td><td><code class="copy-target tech" data-cmd="/give @p techguns:revolver">/give @p techguns:revolver</code></td></tr>
+                <tr><td>獲取 石製手炮</td><td><code class="copy-target tech" data-cmd="/give @p techguns:handcannon">/give @p techguns:handcannon</code></td></tr>
+            </table>
+
+            <h2>常用作弊指令</h2>
+            <table>
+                <tr><th>功能</th><th>指令 (點擊複製)</th></tr>
+                <tr><td>創造模式</td><td><code class="copy-target" data-cmd="/gamemode 1">/gamemode 1</code></td></tr>
+                <tr><td>生存模式</td><td><code class="copy-target" data-cmd="/gamemode 0">/gamemode 0</code></td></tr>
+                <tr><td>防噴 (死亡不掉落)</td><td><code class="copy-target" data-cmd="/gamerule keepInventory true">/gamerule keepInventory true</code></td></tr>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('mc-iframe');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const toast = document.getElementById('toast');
+            const armoryToggle = document.getElementById('armory-toggle');
+            const quickArmory = document.getElementById('quick-armory');
+            const btnCheatsheet = document.getElementById('btn-cheatsheet');
+            const modalOverlay = document.getElementById('modal-overlay');
+            const btnClose = document.getElementById('btn-close');
+            let toastTimeout;
+
+            // --- 處理 Iframe 載入 ---
+            iframe.addEventListener('load', () => {
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => { loadingOverlay.style.display = 'none'; }, 500);
+            });
+
+            const focusGame = () => { setTimeout(() => { iframe.focus(); }, 100); };
+
+            // --- 展開/收起快速武裝 ---
+            armoryToggle.addEventListener('click', () => {
+                const isHidden = quickArmory.style.display === 'none' || quickArmory.style.display === '';
+                if (isHidden) {
+                    quickArmory.style.display = 'flex';
+                    armoryToggle.innerHTML = '⚡ 收起面板';
+                } else {
+                    quickArmory.style.display = 'none';
+                    armoryToggle.innerHTML = '⚡ 展開武裝 / Techguns';
+                    focusGame();
+                }
+            });
+
+            // --- Toast 提示功能 ---
+            const showToast = (message) => {
+                toast.innerText = message;
+                toast.classList.add("show");
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(() => { toast.classList.remove("show"); }, 2500);
+            };
+
+            // --- 複製指令邏輯 ---
+            const copyCommand = async (cmd) => {
+                if(!cmd) return;
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(cmd);
+                        showToast(`✅ 已複製：${cmd}`);
+                    } else { throw new Error('Fallback needed'); }
+                } catch (err) {
+                    const el = document.createElement('textarea');
+                    el.value = cmd; el.style.position = 'fixed'; el.style.left = '-9999px';
+                    document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                    showToast(`✅ 已複製：${cmd}`);
+                }
+            };
+
+            document.querySelectorAll('.cmd-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    copyCommand(btn.getAttribute('data-cmd'));
+                    quickArmory.style.display = 'none';
+                    armoryToggle.innerHTML = '⚡ 展開武裝 / Techguns';
+                    focusGame();
+                });
+            });
+
+            document.querySelectorAll('.copy-target').forEach(code => {
+                code.addEventListener('click', () => { copyCommand(code.getAttribute('data-cmd')); });
+            });
+
+            // --- 指令速查 Modal 邏輯 ---
+            btnCheatsheet.addEventListener('click', () => { modalOverlay.style.display = 'flex'; });
+            const closeModal = () => { modalOverlay.style.display = 'none'; focusGame(); };
+            btnClose.addEventListener('click', closeModal);
+            modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+            window.onload = focusGame;
+        });
+    </script>
+</body>
+</html>
