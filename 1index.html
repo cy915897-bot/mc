@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aa1228no1 ∞ Minecraft 1.12.2 WASM (Techguns & Mobile)</title>
+    <style>
+        /* --- 基礎重置與佈局 --- */
+        :root {
+            --neon-green: #00FF00;
+            --tech-blue: #00e5ff;
+            --dark-bg: rgba(5, 15, 5, 0.85);
+            --glass-border: rgba(0, 255, 0, 0.4);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            color: #e0e0e0;
+            touch-action: none; /* 防止手機雙擊放大或滑動整理 */
+        }
+
+        * { box-sizing: border-box; }
+
+        /* --- 遊戲主體 iframe --- */
+        #mc-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* --- CRT 螢幕掃描線特效 (不影響點擊) --- */
+        .crt-scanlines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
+            background-size: 100% 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #loading-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--neon-green);
+            font-size: 1.5rem;
+            text-align: center;
+            z-index: 0;
+            text-shadow: 0 0 10px var(--neon-green);
+            animation: flicker 2s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+            20%, 24%, 55% { opacity: 0.5; }
+        }
+
+        /* --- ⚡ 左上角：迷你開關按鈕 --- */
+        #armory-toggle {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 51;
+            background: rgba(0, 20, 0, 0.8);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 8px 15px;
+            border-radius: 2px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s;
+            box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+            text-transform: uppercase;
+        }
+        #armory-toggle:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+
+        /* --- ⚡ 左上角：武裝面板 --- */
+        #quick-armory {
+            display: none;
+            position: absolute;
+            top: 55px;
+            left: 15px;
+            z-index: 50;
+            background: var(--dark-bg);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 4px;
+            flex-direction: column;
+            gap: 10px;
+            backdrop-filter: blur(5px);
+            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.05), 0 0 15px rgba(0, 255, 0, 0.2);
+            width: 250px; 
+            border-left: 4px solid var(--neon-green);
+        }
+
+        /* 觸碰偵測狀態區 */
+        #touch-status {
+            font-size: 0.8rem;
+            padding: 6px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px dashed var(--tech-blue);
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .cmd-btn {
+            background: rgba(0, 255, 0, 0.1);
+            color: #fff;
+            border: 1px solid var(--glass-border);
+            padding: 8px 10px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.8rem; 
+            text-align: left;
+            transition: all 0.2s;
+        }
+        .cmd-btn:hover { 
+            background: rgba(0, 255, 0, 0.3); 
+            border-color: var(--neon-green);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        /* --- 系統提示 Toast --- */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: rgba(0, 20, 0, 0.95);
+            color: var(--neon-green);
+            text-align: center;
+            padding: 12px;
+            position: absolute;
+            z-index: 100;
+            left: 50%;
+            top: 20px;
+            transform: translateX(-50%);
+            font-size: 0.95rem;
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+            font-weight: bold;
+        }
+        #toast.show { visibility: visible; animation: fadein 0.3s, fadeout 0.5s 2s forwards; }
+        @keyframes fadein { from {top: -20px; opacity: 0;} to {top: 20px; opacity: 1;} }
+        @keyframes fadeout { from {top: 20px; opacity: 1;} to {top: -20px; opacity: 0;} }
+
+        /* --- 🎮 手機專用虛擬按鍵 (預設隱藏，偵測到觸控才顯示) --- */
+        #virtual-controls {
+            display: none; 
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100vw; height: 100vh;
+            pointer-events: none; /* 讓畫面中央仍然可以點擊到遊戲 */
+            z-index: 45; 
+        }
+
+        /* 搖桿區域 */
+        .d-pad { position: absolute; bottom: 30px; left: 30px; width: 160px; height: 160px; pointer-events: auto; }
+        .action-pad { position: absolute; bottom: 30px; right: 30px; width: 180px; height: 160px; pointer-events: auto; }
+
+        /* 按鍵本體設計 (Techguns 發光風格) */
+        .v-btn {
+            position: absolute;
+            background: rgba(0, 40, 0, 0.5);
+            border: 2px solid var(--neon-green);
+            color: var(--neon-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            user-select: none;
+            touch-action: none;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2), inset 0 0 10px rgba(0, 255, 0, 0.2);
+            backdrop-filter: blur(2px);
+            transition: background 0.1s, transform 0.1s;
+        }
+
+        .v-btn:active, .v-btn.active {
+            background: rgba(0, 255, 0, 0.4);
+            box-shadow: 0 0 20px var(--neon-green), inset 0 0 20px var(--neon-green);
+            transform: scale(0.9);
+            color: #fff;
+        }
+
+        /* 左側方向鍵位置 */
+        #btn-w { top: 0; left: 55px; width: 50px; height: 50px; }
+        #btn-s { bottom: 0; left: 55px; width: 50px; height: 50px; }
+        #btn-a { top: 55px; left: 0; width: 50px; height: 50px; }
+        #btn-d { top: 55px; right: 0; width: 50px; height: 50px; }
+
+        /* 右側動作鍵位置 */
+        #btn-jump { bottom: 0; left: 50px; width: 70px; height: 70px; border-radius: 15px; font-size: 1.1rem; border-color: var(--tech-blue); color: var(--tech-blue); box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);}
+        #btn-jump:active, #btn-jump.active { background: rgba(0, 229, 255, 0.4); box-shadow: 0 0 20px var(--tech-blue); }
+        
+        #btn-atk { top: 0; left: 0; width: 55px; height: 55px; font-size: 0.8rem;}
+        #btn-use { top: 0; right: 20px; width: 55px; height: 55px; font-size: 0.8rem;}
+        #btn-inv { bottom: 60px; right: 0; width: 45px; height: 45px; font-size: 0.8rem; background: rgba(50, 50, 50, 0.5); border-color: #aaa; color: #aaa;}
+
+        /* --- 右下角速查 --- */
+        #btn-cheatsheet {
+            position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 50; background: rgba(0, 0, 0, 0.8); color: var(--tech-blue); border: 1px solid var(--tech-blue);
+            padding: 8px 15px; border-radius: 2px; font-size: 0.9rem; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-text">SYSTEM.BOOTING...</div>
+    <div class="crt-scanlines"></div>
+
+    <iframe id="mc-iframe" src="https://play.mcjs.cc/1.12.2wasm/" allowfullscreen="true" allow="clipboard-read; clipboard-write; cross-origin-isolated"></iframe>
+
+    <button id="armory-toggle">⚡ 展開武裝</button>
+
+    <div id="quick-armory">
+        <div id="touch-status">偵測系統狀態...</div>
+        <button class="cmd-btn" data-cmd="/gamemode 1">創造模式</button>
+        <button class="cmd-btn" data-cmd="/give @p techguns:gaussrifle 1">獲得電磁砲</button>
+        <button class="cmd-btn" data-cmd="/time set day">時間重置</button>
+    </div>
+
+    <div id="toast">✅ COMMAND COPIED</div>
+    <button id="btn-cheatsheet">📜 系統資料庫</button>
+
+    <!-- 🎮 虛擬控制搖桿區域 -->
+    <div id="virtual-controls">
+        <div class="d-pad">
+            <div id="btn-w" class="v-btn">W</div>
+            <div id="btn-a" class="v-btn">A</div>
+            <div id="btn-s" class="v-btn">S</div>
+            <div id="btn-d" class="v-btn">D</div>
+        </div>
+        <div class="action-pad">
+            <div id="btn-atk" class="v-btn">攻擊</div>
+            <div id="btn-use" class="v-btn">放置</div>
+            <div id="btn-jump" class="v-btn">JUMP</div>
+            <div id="btn-inv" class="v-btn">背包</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('mc-iframe');
+            const toast = document.getElementById('toast');
+            const armoryToggle = document.getElementById('armory-toggle');
+            const quickArmory = document.getElementById('quick-armory');
+            const touchStatus = document.getElementById('touch-status');
+            const virtualControls = document.getElementById('virtual-controls');
+
+            // --- 🎯 觸碰功能偵測邏輯 ---
+            const checkTouchDevice = () => {
+                const isTouch = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
+                
+                if (isTouch) {
+                    touchStatus.innerHTML = '偵測觸碰功能<br><span style="color: var(--neon-green); font-weight: bold;">是=觸碰功能開啟</span>';
+                    touchStatus.style.borderColor = 'var(--neon-green)';
+                    // 開啟手機虛擬按鍵
+                    virtualControls.style.display = 'block';
+                } else {
+                    touchStatus.innerHTML = '偵測觸碰功能<br><span style="color: #FF5555; font-weight: bold;">否=觸碰功能關閉</span>';
+                    touchStatus.style.borderColor = '#FF5555';
+                    // 為了方便您在電腦上預覽測試，我暫時加上這行：如果在電腦上想看搖桿，可以把下方這行解除註解
+                    // virtualControls.style.display = 'block'; 
+                }
+            };
+            checkTouchDevice();
+
+            // 面板開關邏輯
+            armoryToggle.addEventListener('click', () => {
+                quickArmory.style.display = quickArmory.style.display === 'flex' ? 'none' : 'flex';
+                armoryToggle.innerText = quickArmory.style.display === 'flex' ? '⚡ 收起面板 [X]' : '⚡ 展開武裝';
+            });
+
+            // 複製指令邏輯
+            document.querySelectorAll('.cmd-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const cmd = btn.getAttribute('data-cmd');
+                    const el = document.createElement('textarea');
+                    el.value = cmd; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                    
+                    toast.innerText = `✅ 已複製：${cmd}`;
+                    toast.className = "show";
+                    setTimeout(() => { toast.className = ""; }, 2500);
+                    quickArmory.style.display = 'none';
+                    armoryToggle.innerText = '⚡ 展開武裝';
+                });
+            });
+
+            // --- 🎮 虛擬按鍵互動特效 ---
+            const bindVirtualBtn = (id) => {
+                const btn = document.getElementById(id);
+                if(!btn) return;
+                
+                // 處理按下和放開的視覺特效
+                const triggerOn = (e) => { e.preventDefault(); btn.classList.add('active'); };
+                const triggerOff = (e) => { e.preventDefault(); btn.classList.remove('active'); };
+
+                btn.addEventListener('touchstart', triggerOn, {passive: false});
+                btn.addEventListener('touchend', triggerOff, {passive: false});
+                
+                // 電腦滑鼠測試用
+                btn.addEventListener('mousedown', triggerOn);
+                btn.addEventListener('mouseup', triggerOff);
+                btn.addEventListener('mouseleave', triggerOff);
+            };
+
+            ['btn-w', 'btn-a', 'btn-s', 'btn-d', 'btn-jump', 'btn-atk', 'btn-use', 'btn-inv'].forEach(bindVirtualBtn);
+        });
+    </script>
+</body>
+</html>
